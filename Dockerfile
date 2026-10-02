@@ -1,6 +1,5 @@
-ARG BCI_VERSION=16.0
+ARG ALPINE_VERSION=3.22
 ARG GO_IMAGE=rancher/hardened-build-base:v1.26.8b1
-FROM registry.suse.com/bci/bci-busybox:${BCI_VERSION} AS final
 
 # Image that provides cross compilation tooling.
 FROM --platform=$BUILDPLATFORM rancher/mirrored-tonistiigi-xx:1.6.1 AS xx
@@ -59,44 +58,54 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     cd /src && \
     CGO_ENABLED=0 go build -trimpath \
-      -ldflags="-s -w -X github.com/derailed/k9s/cmd.version=${K9S_VERSION}" \
-      -o /k9s .
+    -ldflags="-s -w -X github.com/derailed/k9s/cmd.version=${K9S_VERSION}" \
+    -o /k9s .
 RUN xx-verify --static /k9s
 
-FROM registry.suse.com/bci/bci-base:${BCI_VERSION} AS zypper
+# Provides the runtime rootfs along with the shell tooling. Alpine is built
+# for the x86-64 baseline (v1), therefore it runs on hosts that do not expose
+# the x86-64-v2 feature set (SSE4.1, SSE4.2, POPCNT, ...), unlike the BCI
+# images which require x86-64-v2 and abort with
+# "Fatal glibc error: CPU does not support x86-64-v2".
+FROM alpine:${ALPINE_VERSION} AS rootfs
 
-# Creates the based dir for the target image, and hydrates it with the
-# original contents of the final image.
-RUN mkdir /chroot
-COPY --from=final / /chroot/
+# Packages are installed into the rootfs of this stage, which is then copied
+# over to the scratch image. GNU coreutils/grep/sed/awk/find replace the
+# busybox applets, so the shell tooling behaves as it did on the previous
+# base, and vim replaces the busybox vi applet.
+RUN apk add --no-cache \
+    bash \
+    bash-completion \
+    ca-certificates \
+    coreutils \
+    curl \
+    findutils \
+    gawk \
+    grep \
+    jq \
+    sed \
+    vim \
+    && rm -f /usr/bin/vi /usr/bin/view /usr/bin/vimdiff \
+    && ln -sf /usr/bin/vim /usr/bin/vi \
+    && rm -rf /var/cache/apk/*
 
-# The final image does not contain zypper, --installroot is used to
-# install all artefacts within a dir (/chroot) that can then be copied
-# over to a scratch image.
-RUN zypper --non-interactive refresh && \
-    zypper --installroot /chroot -n rm busybox-vi busybox-links && \
-    zypper --installroot /chroot -n in bash-completion jq vim curl && \
-    zypper --installroot /chroot clean -a && \
-    rm -rf /chroot/var/cache/zypp/* /chroot/var/log/zypp/* /chroot/etc/zypp/ /chroot/run/zypp.pid
-
-
-RUN echo 'shell:x:1000:1000:shell,,,:/home/shell:/bin/bash' > /chroot/etc/passwd && \
-        echo 'shell:x:1000:' > /chroot/etc/group && \
-        mkdir -p /chroot/home/shell/.kube /chroot/home/shell/helm-run && \
-        echo '. /etc/profile.d/bash_completion.sh' >> /chroot/home/shell/.bashrc && \
-        echo 'alias k="kubectl"' >> /chroot/home/shell/.bashrc && \
-        echo 'alias ks="kubectl -n kube-system"' >> /chroot/home/shell/.bashrc && \
-        echo 'source <(kubectl completion bash)' >> /chroot/home/shell/.bashrc && \
-        echo 'complete -o default -F __start_kubectl k' >> /chroot/home/shell/.bashrc && \
-        echo 'LANG=en_US.UTF-8' >> /chroot/home/shell/.bashrc && \
-        echo 'PS1="> "' >> /chroot/home/shell/.bashrc && \
-        mkdir -p /chroot/tmp && \
-        chmod 1777 /chroot/tmp && \
-        chown -R 1000:1000 /chroot/home/shell
+RUN echo 'shell:x:1000:1000:shell,,,:/home/shell:/bin/bash' > /etc/passwd && \
+    echo 'shell:x:1000:' > /etc/group && \
+    mkdir -p /home/shell/.kube && \
+    echo '. /usr/share/bash-completion/bash_completion' >> /home/shell/.bashrc && \
+    echo 'alias k="kubectl"' >> /home/shell/.bashrc && \
+    echo 'alias ks="kubectl -n kube-system"' >> /home/shell/.bashrc && \
+    echo 'source <(kubectl completion bash)' >> /home/shell/.bashrc && \
+    echo 'complete -o default -F __start_kubectl k' >> /home/shell/.bashrc && \
+    echo 'LANG=en_US.UTF-8' >> /home/shell/.bashrc && \
+    echo 'PS1="> "' >> /home/shell/.bashrc && \
+    mkdir -p /tmp && \
+    chmod 1777 /tmp && \
+    chown -R 1000:1000 /home/shell
 
 FROM scratch
 
-COPY --from=zypper /chroot /
+COPY --from=rootfs / /
 COPY --chown=root:root --chmod=0755 --from=kubectl /kubectl /usr/local/bin/
 COPY --chown=root:root --chmod=0755 --from=helm /helm/bin/helm /usr/local/bin/
 COPY --chown=root:root --chmod=0755 --from=k9s /k9s /usr/local/bin/
