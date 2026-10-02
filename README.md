@@ -9,14 +9,11 @@ The `rancher/shell` image is used:
 ## Branches and Releases
 This is the current branch strategy for `rancher/shell`, it may change in the future.
 
-| Branch          | Tag      | Rancher                |
-|-----------------|----------|------------------------|
-| `main`          | `head`   | `main` branch (`head`) |
-| `release/v2.13` | `v0.6.x` | `v2.13.x`              |
-| `release/v2.12` | `v0.5.x` | `v2.12.x`              |
-| `release/v2.11` | `v0.4.x` | `v2.11.x`              |
-| `release/v2.10` | `v0.3.x` | `v2.10.x`              |
-| `release/v2.9`  | `v0.2.x` | `v2.9.x`               |
+| Branch          | Tag         | Upstream Tag  |  Rancher               |
+|-----------------|-------------|---------------|------------------------|
+| `main`          | `head`      | `head`        | `main` branch (`head`) |
+| `release/v2.15` | `v0.2.x`    | `v0.8.x`      | `v2.15.x`              |
+| `release/v2.14` | `v0.1.x`    | `v0.7.x`      | `v2.14.x`              |
 
 ### Branch Info Overview
 

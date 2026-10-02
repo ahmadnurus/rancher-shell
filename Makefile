@@ -8,8 +8,8 @@ include hack/make/build.mk
 # Define target platforms, image builder and the fully qualified image name.
 TARGET_PLATFORMS ?= linux/amd64,linux/arm64
 
-REPO ?= rancher
-IMAGE = $(REPO)/shell:$(TAG)
+REPO 	?= ahmadnurus
+IMAGE 	= $(REPO)/rancher-shell:$(TAG)
 BUILD_ACTION = --load
 
 .DEFAULT_GOAL := ci
