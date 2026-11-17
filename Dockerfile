@@ -1,4 +1,4 @@
-ARG ALPINE_VERSION=3.22
+ARG ALPINE_VERSION=edge
 ARG GO_IMAGE=rancher/hardened-build-base:v1.26.8b1
 
 # Image that provides cross compilation tooling.
